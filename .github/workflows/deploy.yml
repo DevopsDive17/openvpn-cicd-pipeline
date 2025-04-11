@@ -1,0 +1,52 @@
+name: Build and Deploy via VPN
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build application
+        run: |
+          # Your build steps here
+          echo "Building application..."
+          # Example: npm install && npm run build
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    name: Deploy Application via VPN & SSH
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Install & Connect to OpenVPN
+        run: |
+          sudo apt update
+          sudo apt install -y openvpn 
+          echo "${{ secrets.OVPN_CONFIG_B64 }}" | base64 -d > sslvpn.ovpn
+          echo "${{ secrets.OVPN_USERNAME }}" > auth.txt
+          echo "${{ secrets.OVPN_PASSWORD }}" >> auth.txt
+          sudo openvpn --config sslvpn.ovpn --auth-user-pass auth.txt --daemon
+          sleep 15  # wait for VPN connection to establish
+          
+      - name: Verify VPN Connection
+        run: |
+          curl -v ${{ secrets.HOST_DNS }} || (echo "VPN connection failed!" && exit 1)
+          
+      - name: Deploy Application to VPS via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST_DNS }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "Deploying application..........."
+            # Add your deployment commands here
